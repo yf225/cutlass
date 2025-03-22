@@ -47,6 +47,8 @@
 #include "cutlass/arch/mma_sm90.h"
 #include "cutlass/device_kernel.h"
 
+#include <torch/torch.h>
+
 using namespace cute;
 
 template <class ElementA,
@@ -444,6 +446,25 @@ gemm(char transA, char transB, int m, int n, int k,
   assert(false && "Not implemented");
 }
 
+// Function to compare a thrust::device_vector with a torch::Tensor on GPU.
+bool compare_thrust_and_torch_tensors(const thrust::device_vector<cutlass::half_t>& thrust_vec,
+                           const torch::Tensor& torch_tensor) {
+    // Ensure tensor is on GPU, has half precision, and sizes match.
+    TORCH_CHECK(torch_tensor.is_cuda(), "Tensor must be on CUDA device.");
+    TORCH_CHECK(torch_tensor.dtype() == torch::kHalf, "Tensor must be float16 (half).");
+    TORCH_CHECK(torch_tensor.numel() == static_cast<int64_t>(thrust_vec.size()),
+                "Size mismatch between thrust vector and torch tensor.");
+
+    // Use at::Half instead of cutlass::half_t, since that's what PyTorch provides.
+    auto torch_ptr = torch_tensor.data_ptr<at::Half>();
+
+    // If cutlass::half_t is binary-compatible with at::Half, cast the pointer.
+    auto torch_dev_ptr = thrust::device_pointer_cast(reinterpret_cast<cutlass::half_t*>(torch_ptr));
+
+    // Compare the device vectors elementwise on the GPU.
+    return thrust::equal(thrust_vec.begin(), thrust_vec.end(), torch_dev_ptr);
+}
+
 int main(int argc, char** argv)
 {
   cudaDeviceProp props;
@@ -537,6 +558,55 @@ int main(int argc, char** argv)
        d_C.data().get(), ldC);
   CUTE_CHECK_LAST();
   thrust::host_vector<TC> cute_result = d_C;
+
+  // -------------------------------
+  // Libtorch GEMM Baseline for Accuracy Check
+  {
+    // Assume d_C is the device tensor that contains the result of the CUTE_GEMM
+
+    // Create torch options for half-precision on CUDA
+    torch::TensorOptions options =
+        torch::TensorOptions().dtype(torch::kHalf).device(torch::kCUDA);
+
+    // --- Convert matrix A ---
+    // h_A is stored in column-major order representing an m x k matrix.
+    // To create a row-major tensor, we create a tensor of shape {k, m} and then
+    // transpose.
+    auto A_base = torch::from_blob(d_A.data().get(), {k, m}, options)
+                      .clone()
+                      .t(); // now A_base is m x k in row-major order
+    // Apply the transpose flag for A if needed: op(A) = A or A^T
+    auto A_torch = (transA == 'T') ? A_base.t() : A_base;
+
+    // --- Convert matrix B ---
+    // Depending on transB, the logical shape of B differs:
+    // If transB == 'N', B is treated as a k x n matrix (stored column-major in
+    // h_B). If transB == 'T', B is treated as an n x k matrix (stored
+    // column-major in h_B).
+    torch::Tensor B_base;
+    if (transB == 'N') {
+      B_base = torch::from_blob(d_B.data().get(), {n, k}, options)
+                   .clone()
+                   .t(); // B_base is k x n
+    } else {
+      B_base = torch::from_blob(d_B.data().get(), {k, n}, options)
+                   .clone()
+                   .t(); // B_base is n x k
+    }
+    // Apply the transpose flag for B: op(B) = B or B^T
+    auto B_torch = (transB == 'T') ? B_base.t() : B_base;
+
+    // --- Perform GEMM using libtorch ---
+    // torch::mm computes a matrix multiply: (m x k) * (k x n) = (m x n)
+    auto C_torch = torch::mm(A_torch, B_torch);
+
+    // For comparison, we need to account for the fact that cute_result is
+    // stored in column-major order. Here, we transpose the libtorch result to
+    // get a column-major layout.
+    auto C_torch_cm = C_torch.t().contiguous();
+
+    assert(compare_thrust_and_torch_tensors(d_C, C_torch_cm));
+  }
 
   // Timing iterations
   timer.start();

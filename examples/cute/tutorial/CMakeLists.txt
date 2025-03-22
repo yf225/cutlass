@@ -28,30 +28,29 @@
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 add_subdirectory(hopper)
-add_subdirectory(blackwell)
+# add_subdirectory(blackwell)
 
-cutlass_example_add_executable(
-  cute_tutorial_sgemm_1
-  sgemm_1.cu
-)
-
-cutlass_example_add_executable(
-  cute_tutorial_sgemm_2
-  sgemm_2.cu
-)
-
-cutlass_example_add_executable(
-  cute_tutorial_sgemm_sm70
-  sgemm_sm70.cu
-)
-
-cutlass_example_add_executable(
-  cute_tutorial_sgemm_sm80
-  sgemm_sm80.cu
-)
-
-cutlass_example_add_executable(
-  cute_tutorial_tiled_copy
-  tiled_copy.cu
-)
-
+# cutlass_example_add_executable(
+#   cute_tutorial_sgemm_1
+#   sgemm_1.cu
+# )
+#
+# cutlass_example_add_executable(
+#   cute_tutorial_sgemm_2
+#   sgemm_2.cu
+# )
+#
+# cutlass_example_add_executable(
+#   cute_tutorial_sgemm_sm70
+#   sgemm_sm70.cu
+# )
+#
+# cutlass_example_add_executable(
+#   cute_tutorial_sgemm_sm80
+#   sgemm_sm80.cu
+# )
+#
+# cutlass_example_add_executable(
+#   cute_tutorial_tiled_copy
+#   tiled_copy.cu
+# )

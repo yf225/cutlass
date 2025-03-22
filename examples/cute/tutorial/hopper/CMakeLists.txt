@@ -27,10 +27,13 @@
 # OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-cutlass_example_add_executable(
-  cute_tutorial_wgmma_sm90
-  wgmma_sm90.cu
-)
+find_package(Torch REQUIRED)
+link_libraries(${TORCH_LIBRARIES})
+
+# cutlass_example_add_executable(
+#   cute_tutorial_wgmma_sm90
+#   wgmma_sm90.cu
+# )
 
 cutlass_example_add_executable(
   cute_tutorial_wgmma_tma_sm90
