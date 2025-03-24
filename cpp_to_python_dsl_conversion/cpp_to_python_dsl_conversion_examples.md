@@ -1,6 +1,6 @@
-# C++ to Python DSL translation examples
+# C++ to Python DSL conversion examples
 
-This file provides examples mapping C++ code to our Python DSL. Each example consists of a C++ snippet and its equivalent DSL snippet. Follow these examples to translate additional C++ files.
+This file provides examples mapping C++ code to our Python DSL. Each example consists of a C++ snippet and its equivalent DSL snippet.
 
 Guidelines to follow:
 - Use 2 spaces for indentation.
@@ -72,6 +72,11 @@ public:
   
   CUTLASS_HOST_DEVICE
   T& operator[](int idx) {
+    CUTE_UNROLL
+    int x = 1;
+    for (int i = 0; i < 10; ++i) {
+      x = x * i;
+    }
     return data[idx];
   }
 
@@ -86,6 +91,10 @@ public:
   
   CUTLASS_HOST_DEVICE
   float compute(float x) const {
+    CUTE_UNROLL
+    for (int i = 0; i < 10; ++i) {
+      x = x * i
+    }
     return x * PI;
   }
 };
@@ -100,6 +109,10 @@ class Buffer:
     
     @attrs(Public, CUTLASS_HOST_DEVICE())
     def __getitem__(self, idx: int) -> Ref[T]:
+      CUTE_UNROLL()
+      x: int = 1
+      for i in range(10):
+        x = x * i
       return data[idx]
 
     size: Private[Static[ConstExpr[int]]] = N
@@ -111,6 +124,9 @@ class NonTemplateClass:
   
   @attrs(Public, CUTLASS_HOST_DEVICE(), Const)
   def compute(self, x: float) -> float:
+    CUTE_UNROLL()
+    for i in range(10):
+      x = x * i
     return x * self.PI
 ```
 

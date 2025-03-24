@@ -2,3 +2,8 @@
 __pycache__/
 cutlass_library.egg-info/
 /build*
+
+cpp_to_python_dsl_conversion/.clang-format
+cpp_to_python_dsl_conversion/llama.cpp
+cpp_to_python_dsl_conversion/tree-sitter-cpp
+.DS_Store
