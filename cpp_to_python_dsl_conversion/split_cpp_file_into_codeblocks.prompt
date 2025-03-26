@@ -1,0 +1,33 @@
+Can you split this C++ file into the following code blocks (please keep the original order as it's in the code):
+- license
+- `#include` statements
+- `using` statements
+- `class` or `struct`: end the previous code block, and create a new code block to include:
+    1. the template declaration (if any).
+    2. the class / struct's qualifiers and attributes.
+    3. the class / struct's name.
+    4. the opening `{` of the class body / struct body.
+    And then, end the current code block, and create a separate (new) code block to include the rest of the class / struct (called "Rest of class body" / "Rest of struct body").
+- function: end the previous code block, and create a new code block to include:
+    1. the template declaration (if any).
+    2. the function qualifiers and attributes.
+    3. the return type.
+    4. the function name.
+    5. the parameter list.
+    6. the opening `{` of the function body.
+    And then, end the current code block, and create a separate (new) code block to include the rest of the function (called "Rest of function body").
+- lambda: end the previous code block, and create a new code block to include:
+    1. the Lambda Introducer.
+    2. the Template Parameter List (if any).
+    3. the Parameter List.
+    4. the opening `{` of the lambda body.
+    And then, end the current code block, and create a separate (new) code block to include the rest of the lambda (called "Rest of lambda body").
+- "Rest of class body" / "Rest of struct body" / "Rest of function body" / "Rest of lambda body":
+  please split them into multiple code blocks as appropriate (can only split right after end-of-statement `;`),
+  the goal is to make each code block relatively short (<20 lines), but also okay to make exceptions to this rule as needed.
+
+Please respond with each code block wrapped in
+```cpp
+...
+```
+and please do not respond with anything else.

@@ -5,11 +5,30 @@ This file provides examples mapping C++ code to our Python DSL. Each example con
 Guidelines to follow:
 - Use 2 spaces for indentation.
 - Both `->` and `.` in C++ translate to `.` in Python DSL.
-- Template specialization using <...> in C++ translates to .spec(...) in Python DSL.
+- DO NOT add Public to the Python DSL code for stuff in `struct`, unless they are specifically specified with `public` in the original C++ code.
+  - In C++, struct members are public by default, while class members are private by default
+  - When translating a C++ struct to Python DSL, do not add explicit Public declarations unless the C++ code has them
+  - Example:
+    ```cpp
+    struct MyStruct {
+      int x;  // implicitly public
+      public:
+        int y;  // explicitly public
+    };
+    ```
+    Translates to:
+    ```python
+    class MyStruct:
+      x: int  # no Public needed
+      #[[public]]
+      y: int  # explicit Public kept
+    ```
+- Template specialization using `<...>` in C++ translates to `.spec(...)` in Python DSL.
   For example:
   - C++: `std::vector<int>` -> Python DSL: `std.vector.spec(int)`
   - C++: `MyClass<T, U>` -> Python DSL: `MyClass.spec(T, U)`
   - C++: `uint64_t tma_barrier[size<2>(SmemLayoutA{})]` -> Python DSL: `tma_barrier: List[uint64_t, size.spec(2)(SmemLayoutA)]`
+  - C++: `tensor<0>(tBsB)` -> Python DSL: `tensor.spec(0)(tBsB)`
 
 ---
 
@@ -69,11 +88,12 @@ template <typename T, int N>
 class Buffer {
 public:
   T data[N];
+  alignas(128) cute::ArrayEngine<ElementA, cosize_v<SmemLayoutA>> A;
   
   CUTLASS_HOST_DEVICE
   T& operator[](int idx) {
-    CUTE_UNROLL
     int x = 1;
+    CUTE_UNROLL
     for (int i = 0; i < 10; ++i) {
       x = x * i;
     }
@@ -93,7 +113,7 @@ public:
   float compute(float x) const {
     CUTE_UNROLL
     for (int i = 0; i < 10; ++i) {
-      x = x * i
+      x = x * i;
     }
     return x * PI;
   }
@@ -104,25 +124,29 @@ public:
 ```python
 @pica.cls(template=True)
 class Buffer:
-  def __new__(_, T: typename, N: int):
-    data: Public[List[T, N]]
+  def __new__(cls, T: typename, N: int):
+    #[[public]]
+    data: List[T, N]
+    A: pica.type[alignas(128), ArrayEngine.spec(ElementA, cosize_v.spec(SmemLayoutA))]
     
-    @attrs(Public, CUTLASS_HOST_DEVICE())
+    @pica.fn(CUTLASS_HOST_DEVICE())
     def __getitem__(self, idx: int) -> Ref[T]:
-      CUTE_UNROLL()
       x: int = 1
+      CUTE_UNROLL()
       for i in range(10):
         x = x * i
       return data[idx]
 
-    size: Private[Static[ConstExpr[int]]] = N
-    ptr: Private[Ptr[T]]
+    #[[private]]
+    size: Static[ConstExpr[int]]] = N
+    ptr: Ptr[T]
 
 @pica.cls
 class NonTemplateClass:
-  PI: Public[Static[ConstExpr[float]]] = 3.14159f
+  #[[public]]
+  PI: Static[ConstExpr[float]] = 3.14159f
   
-  @attrs(Public, CUTLASS_HOST_DEVICE(), Const)
+  @pica.fn(CUTLASS_HOST_DEVICE(), Const)
   def compute(self, x: float) -> float:
     CUTE_UNROLL()
     for i in range(10):
@@ -152,8 +176,7 @@ vectorAdd<<<grid, block>>>(d_a, d_b, d_c, n);
 
 ### Python DSL Code
 ```python
-@pica.func(template=True)
-@attrs(__global__)
+@pica.fn(__global__, template=True)
 def vectorAdd(T: typename) -> None:
   a: Ptr[T]
   b: Ptr[T] 
@@ -164,7 +187,7 @@ def vectorAdd(T: typename) -> None:
   if idx < n:
     c[idx] = a[idx] + b[idx]
 
-@attrs(__device__)
+@pica.fn(__device__)
 def deviceFunc(x: float) -> float:
   return x * x
 
@@ -172,7 +195,42 @@ def deviceFunc(x: float) -> float:
 vectorAdd[grid, block](d_a, d_b, d_c, n)
 ```
 
-## 4. Advanced Template Features
+## 4. More CUDA Kernels and Device Code Examples
+
+### C++ Code
+```cpp
+template <class ProblemShape,
+          class TA, class TmaA,
+          class TC, class TiledMma>
+__global__ static
+__launch_bounds__(decltype(size(TiledMma{}))::value)
+void
+gemm_device(ProblemShape shape_MNK,
+            TA const* A, CUTLASS_GRID_CONSTANT TmaA const tma_a,
+            TC      * C, TiledMma mma)
+{
+  launch(shape_MNK, A, tma_a, C, mma);
+}
+```
+
+### Python Code
+```python
+@pica.fn(__global__, Static, template=True)
+def gemm_device(ProblemShape: typename,
+                TA: typename, TmaA: typename,
+                TC: typename, TiledMma typename) -> None:
+  gemm_device.add_attrs(__launch_bounds__(decltype(size(TiledMma())).value))
+
+  shape_MNK: ProblemShape
+  A: Const[Ptr[TA]]
+  tma_a: CUTLASS_GRID_CONSTANT[Const[TmaA]]
+  C: Ptr[TC]
+  mma: TiledMma
+
+  launch(shape_MNK, A, tma_a, C, mma)
+```
+
+## 5. Advanced Template Features
 
 ### C++ Code
 ```cpp
@@ -204,8 +262,8 @@ struct smart_pointer<T,
 ```python
 @pica.struct(template=True)
 class tuple_wrapper:
-  def __new__(_, *Args: typename):
-    @attrs(Static, CUTLASS_HOST_DEVICE())
+  def __new__(cls, *Args: typename):
+    @pica.fn(Static, CUTLASS_HOST_DEVICE())
     def process(First: typename, *Rest: typename) -> None:
       f: Forward[First]
       rest: Forward[Rest]
@@ -213,18 +271,18 @@ class tuple_wrapper:
 
 @pica.struct(template=True)
 class smart_pointer:
-  def __new__(_, T: typename, Enable: typename = void):
+  def __new__(cls, T: typename, Enable: typename = void):
     is_smart_ptr: Static[ConstExpr[bool]] = False
 
 @pica.struct(template=True)
 class smart_pointer:
-  def __new__(_, T: typename, Enable: typename = std.enable_if_t.spec(
+  def __new__(cls, T: typename, Enable: typename = std.enable_if_t.spec(
       std.is_same_v.spec(typename(Ptr[T.element_type]), decltype(std.declval.spec(T)().get()))
     )):
     is_smart_ptr: Static[ConstExpr[bool]] = True
 ```
 
-## 5. Lambda Functions and Captures
+## 6. Lambda Functions and Captures
 
 ### C++ Code
 ```cpp
@@ -241,6 +299,10 @@ auto lambda3 = [=](int x) mutable {
   return x * multiplier; 
 };
 
+auto lambda4 = [=, &x](int y) {
+  return x * y * multiplier;
+}; 
+
 auto generic_lambda = []<typename T>(T&& x, auto&& y) {
   return std::forward<T>(x) + y;
 };
@@ -254,15 +316,19 @@ multiplier: int = 10
 def lambda1(x: int) -> int:
   return x * multiplier
 
-@pica.lambda(captures=Ref[all], mutable)
+@pica.lambda(captures=[Ref[all]], mutable)
 def lambda2(x: int) -> int:
   multiplier *= 2
   return x * multiplier
 
-@pica.lambda(captures=all, mutable) 
+@pica.lambda(captures=[all], mutable) 
 def lambda3(x: int) -> int:
   multiplier *= 2
   return x * multiplier
+
+@pica.lambda(captures=[all, Ref[x]])
+def lambda4(y: int) -> int:
+  return x * y * multiplier
 
 @pica.lambda(template=True)
 def generic_lambda(T: typename)-> Any:
@@ -272,7 +338,7 @@ def generic_lambda(T: typename)-> Any:
   return std.forward.spec(T)(x) + y
 ```
 
-## 6. Namespaces and Using Directives
+## 7. Namespaces and Using Directives
 
 ### C++ Code
 ```cpp
@@ -294,15 +360,15 @@ using inner_helper = inner::Helper<int>;
 #[[namespace]] inner {
   @pica.struct(template=True)
   class Helper:
-    def __new__(_, T: typename):
+    def __new__(cls, T: typename):
       value: Static[T]
 #} [[end namespace]] inner
-#[[using namespace]] inner
-#[[using]] inner_helper = inner.Helper.spec(int)
+using(namespace(inner))
+inner_helper = using(inner.Helper.spec(int))
 #} [[end namespace]] outer
 ```
 
-## 7. Member Access and Alignment Specifications
+## 8. Member Access and Alignment Specifications
 
 ### C++ Code
 ```cpp
@@ -321,21 +387,20 @@ struct alignas(16) AlignedStruct {
 
 ### Python DSL Code
 ```python
-@pica.struct(template=True)
+@pica.struct(alignas(16), template=True)
 class AlignedStruct:
-  @attrs(alignas(16))
-  def __new__(_, T: typename):
+  def __new__(cls, T: typename):
     value: T
     
     @pica.struct
     class Inner:
-      type: typename = T
+      type = using(T)
       ptr: Ptr[T]
     
     data: Ptr[Inner.type]
 ```
 
-## 8. Friend Functions and Operators
+## 9. Friend Functions and Operators
 
 ### C++ Code
 ```cpp
@@ -361,23 +426,24 @@ public:
 ```python
 @pica.cls(template=True)
 class Container:
-  def __new__(_, T: typename):
-    value: Private[T]
+  def __new__(cls, T: typename):
+    value: T
     
-    @attrs(Friend, Template)
+    @pica.cls(Friend, template=True)
     class OtherContainer:
-      U: typename
+      def __new__(cls, U: typename):
+        ...
     
-    @attrs(Friend)
+    @pica.fn(Friend)
     def __lshift__(os: Ref[std.ostream], c: Const[Ref[Container]]) -> Ref[std.ostream]:
       return os << c.value
     
     def __iadd__(self, rhs: Const[Ref[Container]]) -> Ref[Container]:
       self.value += rhs.value
-      return self.deref()
+      return deref(self)
 ```
 
-## 9. Type Traits and Static Assertions
+## 10. Type Traits and Static Assertions
 
 ### C++ Code
 ```cpp
@@ -395,76 +461,40 @@ struct is_valid {
 ```python
 @pica.struct(template=True)
 class is_valid:
-  def __new__(_, T: typename):
+  def __new__(cls, T: typename):
     static_assert(sizeof(T) > 1, "Type too small")
     static_assert(std.is_default_constructible_v.spec(T), "Must be default constructible")
     
     @pica.cls(template=True)
     class is_convertible:
-      def __new__(_, U: typename):
+      def __new__(cls, U: typename):
         return std.is_convertible_v.spec(T, U)
 ```
 
-## 10. Operator Overloading Examples
+## 11. Type Alias and reinterpret_cast
 
-### 10.1 Arithmetic Operators
-cpp```operator+``` => python```__add__```
-cpp```operator-``` => python```__sub__```
-cpp```operator*``` => python```__mul__```
-cpp```operator/``` => python```__truediv__```
-cpp```operator%``` => python```__mod__```
-cpp```operator+()``` => python```__pos__```  // unary plus
-cpp```operator-()``` => python```__neg__```  // unary minus
+### C++ Code
+```cpp
+extern __shared__ char shared_memory[];
+using SharedStorage = SharedStorage<TA, TB, SmemLayoutA, SmemLayoutB>;
+SharedStorage& smem = *reinterpret_cast<SharedStorage*>(shared_memory);
+```
 
-### 10.2 Compound Assignment
-cpp```operator+=``` => python```__iadd__```
-cpp```operator-=``` => python```__isub__```
-cpp```operator*=``` => python```__imul__```
-cpp```operator/=``` => python```__idiv__```
-cpp```operator%=``` => python```__imod__```
+### Python Code
+```python
+shared_memory: extern[__shared__[List[char]]]
+SharedStorage = using(SharedStorage.spec(TA, TB, SmemLayoutA, SmemLayoutB))
+smem = deref(reinterpret_cast.spec(Ptr[SharedStorage])(shared_memory))
+```
 
-### 10.3 Increment/Decrement
-cpp```operator++()``` => python```__preinc__```     // pre-increment
-cpp```operator--()``` => python```__predec__```     // pre-decrement
-cpp```operator++(int)``` => python```__postinc__```  // post-increment
-cpp```operator--(int)``` => python```__postdec__```  // post-decrement
+## 12. `&` usage (Address-of Operator)
 
-### 10.4 Comparison Operators
-cpp```operator==``` => python```__eq__```
-cpp```operator!=``` => python```__ne__```
-cpp```operator<``` => python```__lt__```
-cpp```operator<=``` => python```__le__```
-cpp```operator>``` => python```__gt__```
-cpp```operator>=``` => python```__ge__```
+### C++ Code
+```cpp
+ZType::wait(&mbar[pipe], write_state.phase());
+```
 
-### 10.5 Logical Operators
-cpp```operator&&``` => python```__and__```
-cpp```operator||``` => python```__or__```
-cpp```operator!``` => python```__not__```
-
-### 10.6 Bitwise Operators
-cpp```operator&``` => python```__band__```
-cpp```operator|``` => python```__bor__```
-cpp```operator^``` => python```__xor__```
-cpp```operator~``` => python```__invert__```
-cpp```operator<<``` => python```__lshift__```
-cpp```operator>>``` => python```__rshift__```
-cpp```operator&=``` => python```__iband__```
-cpp```operator|=``` => python```__ibor__```
-cpp```operator^=``` => python```__ixor__```
-cpp```operator<<=``` => python```__ilshift__```
-cpp```operator>>=``` => python```__irshift__```
-
-### 10.7 Array Subscript Operator
-cpp```operator[]``` => python```__getitem__```
-
-### 10.8 Function Call Operator
-cpp```operator()``` => python```__call__```
-
-### 10.9 Member Access Operators
-cpp```operator->``` => python```__arrow__```
-cpp```operator*``` => python```__deref__```
-
-### 10.10 Stream Operators
-cpp```operator<<``` => python```__lshift__```
-cpp```operator>>``` => python```__rshift__```
+### Python Code
+```python
+ZType.wait(addr_of(mbar[pipe]), write_state.phase())
+```
