@@ -1,11 +1,11 @@
-// nvcc cuda_example.cu -o main -ftemplate-depth=1000
+// nvcc cuda_example.cu -o main -ftemplate-depth=2000
 
 #include <cuda_runtime.h>
 #include <iostream>
 
-// This code is intentionally designed to compile extremely slowly 
+// This code is intentionally designed to compile extremely slowly
 // by heavily using C++ template meta-programming.
-// You may need to adjust your compiler's template recursion limit 
+// You may need to adjust your compiler's template recursion limit
 // (e.g., using -ftemplate-depth=6000 with nvcc) when compiling.
 
 // A recursive template that instantiates a chain of 5000 recursive calls.
@@ -46,20 +46,20 @@ __global__ void kernel(int *data) {
     // Use the heavy compile-time computed values:
     //   CompileTimeMultiplier<5000>::value instantiates the heavy recursion,
     //   and VariadicSum<int, 1,2,3,4,5>::value adds a small constant.
-    data[idx] = CompileTimeMultiplier<100>::value + VariadicSum<int, 1, 2, 3, 4, 5>::value;
+    data[idx] = CompileTimeMultiplier<1000>::value + VariadicSum<int, 1, 2, 3, 4, 5>::value;
 }
 
 int main() {
     const int N = 256;
     int *d_data;
     int h_data[N];
-    
+
     cudaMalloc(&d_data, N * sizeof(int));
     kernel<<<1, N>>>(d_data);
     cudaDeviceSynchronize();
     cudaMemcpy(h_data, d_data, N * sizeof(int), cudaMemcpyDeviceToHost);
     cudaFree(d_data);
-    
+
     std::cout << "Result: " << h_data[0] << std::endl;
     return 0;
 }
