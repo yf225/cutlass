@@ -45,6 +45,7 @@
 #include "cutlass/profiler/cublas_helpers.h"
 #include "cutlass/profiler/gemm_operation_profiler.h"
 #include "cutlass/profiler/gpu_timer.h"
+#include "cutlass/profiler/torch_utils.h"
 #include "cutlass/library/singleton.h"
 #include "cutlass/library/library.h"
 #include "cutlass/library/handle.h"
@@ -75,9 +76,9 @@ GemmOperationProfiler::GemmOperationProfiler(Options const &options):
       {ArgumentTypeID::kInteger, {"split_k_slices", "split-k-slices"}, "Number of partitions of K dimension"},
       {ArgumentTypeID::kInteger, {"batch_count", "batch-count"}, "Number of GEMMs computed in one batch"},
       {ArgumentTypeID::kEnumerated, {"raster_order", "raster-order"}, "Raster order (heuristic, along_n, along_m)"},
-      {ArgumentTypeID::kEnumerated, {"runtime_input_datatype_a", "runtime-input-datatype::a"}, "Runtime datatype (e4m3, e5m2, e3m2, e2m3, e2m1)"}, 
-      {ArgumentTypeID::kEnumerated, {"runtime_input_datatype_b", "runtime-input-datatype::b"}, "Runtime datatype (e4m3, e5m2, e3m2, e2m3, e2m1)"}, 
-      {ArgumentTypeID::kInteger, {"use_pdl", "use-pdl"}, "Use PDL (true, false)"}, 
+      {ArgumentTypeID::kEnumerated, {"runtime_input_datatype_a", "runtime-input-datatype::a"}, "Runtime datatype (e4m3, e5m2, e3m2, e2m3, e2m1)"},
+      {ArgumentTypeID::kEnumerated, {"runtime_input_datatype_b", "runtime-input-datatype::b"}, "Runtime datatype (e4m3, e5m2, e3m2, e2m3, e2m1)"},
+      {ArgumentTypeID::kInteger, {"use_pdl", "use-pdl"}, "Use PDL (true, false)"},
       {ArgumentTypeID::kEnumerated, {"enable_sm90_mixed_dtype_shuffle_test", "enable-sm90-mixed-dtype-shuffle-test"}, "Enable SM90 mixed input data type kernel shuffle layout test (true, false)"},
       {ArgumentTypeID::kInteger, {"swizzle_size", "swizzle-size"}, "Size to swizzle"},
     },
@@ -229,7 +230,7 @@ Status GemmOperationProfiler::GemmProblem::parse(
     this->split_k_slices = 1;
   }
 
-  
+
   if (!arg_as_RuntimeDatatype(this->runtime_input_datatype_a, "runtime_input_datatype_a", problem_space, problem)) {
     // default value
     this->runtime_input_datatype_a = cutlass::library::RuntimeDatatype::kStatic;
@@ -239,7 +240,7 @@ Status GemmOperationProfiler::GemmProblem::parse(
     // default value
     this->runtime_input_datatype_b = cutlass::library::RuntimeDatatype::kStatic;
   }
-  
+
 
   if (!arg_as_int(this->batch_count, "batch_count", problem_space, problem)) {
     // default value
@@ -316,7 +317,7 @@ Status GemmOperationProfiler::GemmProblem::parse(
   int num_sizes = 8;
   this->problem_sizes.resize(num_sizes);
   this->leading_dims.resize(num_sizes, {0, 0, 0});
-    
+
   int m0 = 1024;
   int n0 = 1024;
   int k0 = 1024;
@@ -440,14 +441,14 @@ void GemmOperationProfiler::GemmProblem::initialize_result(
   set_argument(result, "n", problem_space, n);
   set_argument(result, "k", problem_space, k);
 
-  
+
   set_argument(result, "cluster_m", problem_space, cluster_m);
   set_argument(result, "cluster_n", problem_space, cluster_n);
   set_argument(result, "cluster_k", problem_space, cluster_k);
   set_argument(result, "cluster_m_fallback", problem_space, cluster_m_fallback);
   set_argument(result, "cluster_n_fallback", problem_space, cluster_n_fallback);
   set_argument(result, "cluster_k_fallback", problem_space, cluster_k_fallback);
-  
+
 
   set_argument(result, "split_k_mode", problem_space, library::to_string(split_k_mode));
   set_argument(result, "split_k_slices", problem_space, split_k_slices);
@@ -457,10 +458,10 @@ void GemmOperationProfiler::GemmProblem::initialize_result(
   set_argument(result, "use_pdl", problem_space, library::to_string(use_pdl));
   set_argument(result, "enable_sm90_mixed_dtype_shuffle_test", problem_space, library::to_string(enable_sm90_mixed_dtype_shuffle_test));
 
-  
+
   set_argument(result, "runtime_input_datatype_a", problem_space, library::to_string(runtime_input_datatype_a));
   set_argument(result, "runtime_input_datatype_b", problem_space, library::to_string(runtime_input_datatype_b));
-  
+
 
   set_argument(result, "alpha", problem_space,
     library::lexical_cast(alpha, operation_desc.element_epilogue));
@@ -518,7 +519,7 @@ Status GemmOperationProfiler::initialize_configuration(
     gemm_workspace_[i].configuration.problem_size.m() = int(problem_.m);
     gemm_workspace_[i].configuration.problem_size.n() = int(problem_.n);
     gemm_workspace_[i].configuration.problem_size.k() = int(problem_.k);
-    
+
     gemm_workspace_[i].configuration.cluster_shape.m() = int(problem_.cluster_m);
     gemm_workspace_[i].configuration.cluster_shape.n() = int(problem_.cluster_n);
     gemm_workspace_[i].configuration.cluster_shape.k() = int(problem_.cluster_k);
@@ -560,14 +561,14 @@ Status GemmOperationProfiler::initialize_configuration(
     gemm_workspace_[i].arguments.pointer_mode = library::ScalarPointerMode::kHost;
     gemm_workspace_[i].arguments.swizzle_size = problem_.swizzle_size;
     gemm_workspace_[i].arguments.raster_order = problem_.raster_order;
-    gemm_workspace_[i].arguments.cluster_shape = {int(problem_.cluster_m), int(problem_.cluster_n), int(problem_.cluster_k)}; 
-    gemm_workspace_[i].arguments.cluster_shape_fallback = {int(problem_.cluster_m_fallback), int(problem_.cluster_n_fallback), int(problem_.cluster_k_fallback)}; 
+    gemm_workspace_[i].arguments.cluster_shape = {int(problem_.cluster_m), int(problem_.cluster_n), int(problem_.cluster_k)};
+    gemm_workspace_[i].arguments.cluster_shape_fallback = {int(problem_.cluster_m_fallback), int(problem_.cluster_n_fallback), int(problem_.cluster_k_fallback)};
     gemm_workspace_[i].arguments.split_k_slices = problem_.split_k_slices;
 
-    
+
     gemm_workspace_[i].arguments.runtime_input_datatype_a = problem_.runtime_input_datatype_a;
     gemm_workspace_[i].arguments.runtime_input_datatype_b = problem_.runtime_input_datatype_b;
-    
+
 
     initialize_result_(this->model_result_, options, operation_desc, problem_space);
     if (is_sm90_mixed_dtype_operation)
@@ -962,7 +963,7 @@ Status GemmOperationProfiler::initialize_workspace(
     if (options.execution_mode != ExecutionMode::kDryRun) {
       // NOTE: the leading non-batch strides are duplicated here for 3.0 API kernels
       gemm_workspace_[i].arguments.problem_size = {int(problem_.m), int(problem_.n), int(problem_.k)};
-      gemm_workspace_[i].arguments.cluster_shape = {int(problem_.cluster_m), int(problem_.cluster_n), int(problem_.cluster_k)}; 
+      gemm_workspace_[i].arguments.cluster_shape = {int(problem_.cluster_m), int(problem_.cluster_n), int(problem_.cluster_k)};
       gemm_workspace_[i].arguments.cluster_shape_fallback = {int(problem_.cluster_m_fallback), int(problem_.cluster_n_fallback), int(problem_.cluster_k_fallback)};
       gemm_workspace_[i].arguments.split_k_slices = problem_.split_k_slices;
       gemm_workspace_[i].arguments.batch_count = problem_.batch_count;
@@ -1212,7 +1213,7 @@ bool GemmOperationProfiler::verify_cutlass(
     }
 #endif // #if CUTLASS_ENABLE_CUBLAS
 
-    
+
     cutlass::library::RuntimeDatatype runtime_datatype_a = gemm_workspace_.front().arguments.runtime_input_datatype_a;
     cutlass::library::RuntimeDatatype runtime_datatype_b = gemm_workspace_.front().arguments.runtime_input_datatype_b;
 
@@ -1220,7 +1221,7 @@ bool GemmOperationProfiler::verify_cutlass(
     bool is_runtime_datatype_b = runtime_datatype_b != cutlass::library::RuntimeDatatype::kStatic;
 
     assert(is_runtime_datatype_a == is_runtime_datatype_b && "runtime datatype should be both dynamic or static.");
-    
+
 
     library::GemmDescription const &gemm_desc =
       static_cast<library::GemmDescription const &>(operation->description());
@@ -1228,7 +1229,7 @@ bool GemmOperationProfiler::verify_cutlass(
 
     cutlass::library::NumericTypeID element_A = gemm_desc.A.element;
     cutlass::library::NumericTypeID element_B = gemm_desc.B.element;
-    
+
     if (is_runtime_datatype_a) {
       element_A = cutlass::library::dynamic_datatype_to_id(runtime_datatype_a);
     }
@@ -1236,7 +1237,7 @@ bool GemmOperationProfiler::verify_cutlass(
     if (is_runtime_datatype_b) {
       element_B = cutlass::library::dynamic_datatype_to_id(runtime_datatype_b);
     }
-    
+
 
     bool verification_status = verify_with_reference_(options, report, device_context, operation, problem_space, problem, element_A, element_B);
 
@@ -1271,6 +1272,12 @@ bool GemmOperationProfiler::verify_cutlass(
     }
   }
 
+  std::cout << "Saving A:" << std::endl;
+  convert_and_save_as_torch_tensor(gemm_workspace_.front().A, "mat_A_torch.pt");
+  std::cout << "Saving B:" << std::endl;
+  convert_and_save_as_torch_tensor(gemm_workspace_.front().B, "mat_B_torch.pt");
+  std::cout << "Saving output:" << std::endl;
+  convert_and_save_as_torch_tensor(gemm_workspace_.front().Computed, "output_tensor_torch.pt");
   // Return true means continue profiling
   return true;
 }
@@ -1476,14 +1483,14 @@ bool GemmOperationProfiler::verify_with_reference_(
         gemm_workspace_[i].configuration.problem_size.m(),
         gemm_workspace_[i].configuration.problem_size.n(),
         gemm_workspace_[i].configuration.problem_size.k(),
-        
+
         gemm_workspace_[i].configuration.cluster_shape.m(),
         gemm_workspace_[i].configuration.cluster_shape.n(),
         gemm_workspace_[i].configuration.cluster_shape.k(),
         gemm_workspace_[i].configuration.cluster_shape_fallback.m(),
         gemm_workspace_[i].configuration.cluster_shape_fallback.n(),
         gemm_workspace_[i].configuration.cluster_shape_fallback.k(),
-        
+
         gemm_desc.tile_description.math_instruction.element_accumulator,
         gemm_desc.element_epilogue,
 
@@ -1630,7 +1637,7 @@ bool GemmOperationProfiler::profile(
 
           workspace_size = underlying_operation->get_device_workspace_size(&workspace.configuration,
                                                                 &workspace.arguments);
-          
+
           bool is_sparse = operation_desc.tile_description.math_instruction.opcode_class == cutlass::library::OpcodeClassID::kSparseTensorOp;
           if (is_sparse) {
             // sparse gemm get_device_workspace_size() only return device workspace size per iteration
@@ -1711,7 +1718,7 @@ bool GemmOperationProfiler::profile(
       std::vector<PerformanceResult> candidates;
       PerformanceResult result_base = results_.back();
       results_.pop_back();
-      
+
       bool dynamic_cluster = int64_t(operation_desc.tile_description.cluster_shape.m()) == 0 ||
                              int64_t(operation_desc.tile_description.cluster_shape.n()) == 0 ||
                              int64_t(operation_desc.tile_description.cluster_shape.k()) == 0;
@@ -1724,7 +1731,7 @@ bool GemmOperationProfiler::profile(
       if (dynamic_cluster && is_dynamic_cluster_enabled) {
         preferred_clusters = this->problem_.preferred_clusters;
         fallback_clusters = this->problem_.fallback_clusters;
-      } 
+      }
       else {
         preferred_clusters = {{int(problem_.cluster_m), int(problem_.cluster_n), int(problem_.cluster_k)}};
         fallback_clusters = {{int(problem_.cluster_m_fallback), int(problem_.cluster_n_fallback), int(problem_.cluster_k_fallback)}};
@@ -1747,7 +1754,7 @@ bool GemmOperationProfiler::profile(
                 gemm::GemmCoord problem_shape = problem_.problem_sizes[i];
                 std::array<int64_t, 3> leading_dim = problem_.leading_dims[i];
                 auto result_opt = initialize_and_profile(result_base, problem_shape, leading_dim, preferred_cluster, fallback_cluster, raster_order, swizzle_size);
-                  
+
                 if (result_opt) {  // Only add valid results
                   candidates.push_back(*result_opt);
                 }

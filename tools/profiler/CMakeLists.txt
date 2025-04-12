@@ -27,6 +27,7 @@
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 find_package(Python3 3.5 COMPONENTS Interpreter REQUIRED)
+find_package(Torch REQUIRED)
 
 #
 # Sources for CUTLASS Profiler Tool
@@ -41,8 +42,8 @@ set(CUTLASS_TOOLS_PROFILER_SOURCES
   src/gpu_timer.cpp
   src/device_allocation.cu
   src/device_context.cu
-  src/cublas_helpers.cu             
-  src/cudnn_helpers.cpp                   
+  src/cublas_helpers.cu
+  src/cudnn_helpers.cpp
   src/problem_space.cpp
   src/operation_profiler.cu
   src/gemm_operation_profiler.cu
@@ -52,8 +53,8 @@ set(CUTLASS_TOOLS_PROFILER_SOURCES
   src/rank_2k_operation_profiler.cu
   src/trmm_operation_profiler.cu
   src/symm_operation_profiler.cu
-  src/conv2d_operation_profiler.cu          
-  src/conv3d_operation_profiler.cu          
+  src/conv2d_operation_profiler.cu
+  src/conv3d_operation_profiler.cu
   src/sparse_gemm_operation_profiler.cu
 )
 
@@ -78,13 +79,19 @@ target_include_directories(
   ${CMAKE_CURRENT_LIST_DIR}/include
   )
 
+# Add the include directories provided by find_package(Torch)
+target_include_directories(cutlass_profiler PRIVATE ${TORCH_INCLUDE_DIRS})
+
+# Link against the libraries provided by find_package(Torch)
+target_link_libraries(cutlass_profiler PRIVATE ${TORCH_LIBRARIES})
+
 #
 # Library dependencies
 #
 
 target_link_libraries(
   cutlass_profiler
-  PRIVATE 
+  PRIVATE
   cutlass_lib
   cutlass_tools_util_includes
   $<$<BOOL:${CUTLASS_ENABLE_CUBLAS}>:nvidia::cublas>
@@ -132,4 +139,3 @@ cutlass_add_executable_tests(
     CUTLASS_PROFILER_TEST_COMMAND_OPTIONS_
   DISABLE_EXECUTABLE_INSTALL_RULE
   )
-

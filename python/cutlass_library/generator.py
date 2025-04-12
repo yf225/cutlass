@@ -5237,6 +5237,7 @@ def GenerateSM90_TensorOp_16b_WGMMA_gemm(manifest, cuda_version, gemm_kind=GemmK
     [[LayoutType.ColumnMajor, 8], [LayoutType.RowMajor,    8], [LayoutType.ColumnMajor, 1]],
     [[LayoutType.RowMajor,    8], [LayoutType.ColumnMajor, 8], [LayoutType.ColumnMajor, 1]],
     [[LayoutType.RowMajor,    8], [LayoutType.RowMajor,    8], [LayoutType.ColumnMajor, 1]],
+    [[LayoutType.RowMajor,    8], [LayoutType.ColumnMajor, 8], [LayoutType.RowMajor, 1]],
   ]
 
   math_instructions = generate_fp16_bf16_math_instructions_sm90(instantiation_level)
@@ -5300,10 +5301,13 @@ def GenerateSM90_TensorOp_16b_WGMMA_alignx_gemm(manifest, cuda_version):
   # layouts for ABC and their alignments.
   layouts = [
     [[LayoutType.RowMajor,    4], [LayoutType.ColumnMajor, 4], [LayoutType.ColumnMajor, 1]],
+    [[LayoutType.RowMajor,    4], [LayoutType.ColumnMajor, 4], [LayoutType.RowMajor, 1]],
     [[LayoutType.RowMajor,    4], [LayoutType.RowMajor,    4], [LayoutType.ColumnMajor, 1]],
     [[LayoutType.ColumnMajor, 4], [LayoutType.ColumnMajor, 4], [LayoutType.ColumnMajor, 1]],
     [[LayoutType.ColumnMajor, 4], [LayoutType.RowMajor,    4], [LayoutType.ColumnMajor, 1]],
+
     [[LayoutType.RowMajor,    2], [LayoutType.ColumnMajor, 2], [LayoutType.ColumnMajor, 1]],
+    [[LayoutType.RowMajor,    2], [LayoutType.ColumnMajor, 2], [LayoutType.RowMajor, 1]],
     [[LayoutType.RowMajor,    2], [LayoutType.RowMajor,    2], [LayoutType.ColumnMajor, 1]],
     [[LayoutType.ColumnMajor, 2], [LayoutType.ColumnMajor, 2], [LayoutType.ColumnMajor, 1]],
     [[LayoutType.ColumnMajor, 2], [LayoutType.RowMajor,    2], [LayoutType.ColumnMajor, 1]],
@@ -5755,6 +5759,7 @@ def GenerateSM90_TensorOp_fp8_WGMMA_gemm(manifest, cuda_version, gemm_kind=GemmK
   # layouts for ABC and their alignments
   layouts = [
     [[LayoutType.RowMajor, 16], [LayoutType.ColumnMajor, 16], [LayoutType.ColumnMajor, 1]],  # TN Layout
+    [[LayoutType.RowMajor, 16], [LayoutType.ColumnMajor, 16], [LayoutType.RowMajor, 1]],  # TN Layout, T Output
   ]
 
   math_instructions = generate_fp8_math_instructions_sm90(instantiation_level)
@@ -5822,7 +5827,9 @@ def GenerateSM90_TensorOp_fp8_WGMMA_alignx_gemm(manifest, cuda_version):
   # layouts for ABC and their alignments
   layouts = [
     [[LayoutType.RowMajor, 8], [LayoutType.ColumnMajor, 8], [LayoutType.ColumnMajor, 1]],  # TN Layout
+    [[LayoutType.RowMajor, 8], [LayoutType.ColumnMajor, 8], [LayoutType.RowMajor, 1]],  # TN Layout, T Output
     [[LayoutType.RowMajor, 4], [LayoutType.ColumnMajor, 4], [LayoutType.ColumnMajor, 1]],  # TN Layout
+    [[LayoutType.RowMajor, 4], [LayoutType.ColumnMajor, 4], [LayoutType.RowMajor, 1]],  # TN Layout, T Output
   ]
 
   math_instructions = generate_fp8_math_instructions_sm90(instantiation_level)
@@ -6029,6 +6036,7 @@ def GenerateSM90_TensorOp_1684(manifest, cuda_version):
     (LayoutType.ColumnMajor, LayoutType.ColumnMajor, LayoutType.ColumnMajor),
     (LayoutType.ColumnMajor, LayoutType.RowMajor, LayoutType.ColumnMajor),
     (LayoutType.RowMajor, LayoutType.ColumnMajor, LayoutType.ColumnMajor),
+    (LayoutType.RowMajor, LayoutType.ColumnMajor, LayoutType.RowMajor),
     (LayoutType.RowMajor, LayoutType.RowMajor, LayoutType.ColumnMajor),
   ]
 
